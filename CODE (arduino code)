@@ -1,0 +1,98 @@
+#include <Wire.h>
+#include <DHT.h>
+
+// Define pin numbers
+#define SOIL_MOISTURE_PIN A0
+#define RAIN_SENSOR_PIN A1
+#define DHT_PIN 2
+#define DHT_TYPE DHT11
+#define MOTOR_PIN 8
+#define RED_LED_PIN 9   // Red LED for OFF
+#define GREEN_LED_PIN 10 // Green LED for ON
+
+// Threshold values
+#define MOISTURE_THRESHOLD 500
+#define TEMP_HIGH_THRESHOLD 32
+#define TEMP_LOW_THRESHOLD 25
+#define RAIN_DETECTED_THRESHOLD 700 // Rain sensor threshold value
+
+bool motorState = false; // Track motor state
+DHT dht(DHT_PIN, DHT_TYPE);
+
+void setup() {
+  pinMode(MOTOR_PIN, OUTPUT);
+  pinMode(RED_LED_PIN, OUTPUT);
+  pinMode(GREEN_LED_PIN, OUTPUT);
+  digitalWrite(MOTOR_PIN, LOW); // Start with motor OFF
+  digitalWrite(RED_LED_PIN, HIGH); // Red LED ON (Motor OFF)
+  digitalWrite(GREEN_LED_PIN, LOW); // Green LED OFF (Motor OFF)
+
+  Serial.begin(9600);
+
+  // Initialize DHT sensor
+  dht.begin();
+}
+
+void loop() {
+  // Read sensor values
+  int soilMoisture = analogRead(SOIL_MOISTURE_PIN);
+  int rainValue = analogRead(RAIN_SENSOR_PIN);
+  float temperatureCelsius = dht.readTemperature();
+
+  // Check if temperature reading is valid
+  if (isnan(temperatureCelsius)) {
+    Serial.println("Error reading temperature! Defaulting to 0 C.");
+    temperatureCelsius = 0;
+  }
+
+  // Convert soil moisture value to percentage
+  float moisturePercentage = (soilMoisture / 1023.0) * 100;
+
+  // Print sensor data to Serial Monitor
+  Serial.print("Soil Moisture: ");
+  Serial.print(moisturePercentage);
+  Serial.println("%");
+  Serial.print("Temperature (C): ");
+  Serial.println(temperatureCelsius);
+  Serial.print("Rain Sensor Value: ");
+  Serial.println(rainValue);
+  Serial.print("Motor Status: ");
+  Serial.println(motorState ? "ON" : "OFF");
+
+  // Check rain sensor
+  if (rainValue > RAIN_DETECTED_THRESHOLD) {
+    Serial.println("Rain detected. Turning off motor.");
+    digitalWrite(MOTOR_PIN, LOW);
+    motorState = false;
+    // Update LED states
+    digitalWrite(RED_LED_PIN, HIGH);  // Red LED ON (Motor OFF)
+    digitalWrite(GREEN_LED_PIN, LOW); // Green LED OFF (Motor OFF)
+    delay(2000);
+    return;
+  }
+
+  // Check soil moisture and temperature conditions
+  if (soilMoisture < MOISTURE_THRESHOLD && !motorState) {
+    if (temperatureCelsius < TEMP_LOW_THRESHOLD) {
+      Serial.println("Temperature too low, waiting...");
+    } else if (temperatureCelsius > TEMP_HIGH_THRESHOLD) {
+      Serial.println("Temperature too high, waiting...");
+    } else {
+      Serial.println("Temperature is optimal. Turning on motor.");
+      digitalWrite(MOTOR_PIN, HIGH);
+      motorState = true;
+      // Update LED states
+      digitalWrite(RED_LED_PIN, LOW);  // Red LED OFF (Motor ON)
+      digitalWrite(GREEN_LED_PIN, HIGH); // Green LED ON (Motor ON)
+    }
+  } else if (soilMoisture >= MOISTURE_THRESHOLD) {
+    Serial.println("Soil moisture sufficient. Turning off motor.");
+    digitalWrite(MOTOR_PIN, LOW);
+    motorState = false;
+    // Update LED states
+    digitalWrite(RED_LED_PIN, HIGH);  // Red LED ON (Motor OFF)
+    digitalWrite(GREEN_LED_PIN, LOW); // Green LED OFF (Motor OFF)
+  }
+
+  delay(1000); // Small delay for next iteration
+}
